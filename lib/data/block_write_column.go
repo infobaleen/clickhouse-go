@@ -76,6 +76,13 @@ func (block *Block) WriteBytes(c int, v []byte) error {
 	return nil
 }
 
+func (block *Block) WriteRawBytes(c int, v []byte) error {
+	if _, err := block.buffers[c].Column.Write(v); err != nil {
+		return err
+	}
+	return nil
+}
+
 func (block *Block) WriteString(c int, v string) error {
 	if err := block.buffers[c].Column.Uvarint(uint64(len(v))); err != nil {
 		return err
