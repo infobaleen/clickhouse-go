@@ -1,4 +1,4 @@
-module github.com/infobaleen/clickhouse-go
+module github.com/ClickHouse/clickhouse-go
 
 go 1.12
 
