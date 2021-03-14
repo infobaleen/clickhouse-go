@@ -111,3 +111,31 @@ func (block *Block) WriteArrayWithValue(c int, value Value) error {
 	}
 	return block.writeArray(block.Columns[c], value, c, 1)
 }
+
+func (block *Block) stringArrayOffset(c int, length int, intbuf []int) {
+	if len(block.offsets[c]) == 0 {
+		block.offsets[c] = append(block.offsets[c], append(intbuf, length))
+	} else {
+		var b = block.offsets[c][0]		
+		block.offsets[c][0]  = append(b, b[len(b)-1]+length)
+	}
+}
+
+func (block *Block) WriteStringArrayRaw(c int, length int, next func()[]byte, intbuf []int) error {
+	block.stringArrayOffset(c, length, intbuf)
+	return block.WriteRawBytes(c, next())
+}	
+
+func (block *Block) WriteStringArray(c int, length int, next func()[]byte, intbuf []int) error {
+	block.stringArrayOffset(c, length, intbuf)
+
+	for i := 0; i < length; i++{
+		var v = next()
+		if err := block.buffers[c].Column.Uvarint(uint64(len(v))); err != nil {
+			return err
+		}else if _, err := block.buffers[c].Column.Write(v); err != nil {
+			return err
+		}
+	}
+	return nil
+}
