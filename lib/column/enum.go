@@ -2,6 +2,7 @@ package column
 
 import (
 	"fmt"
+	"regexp"
 	"strconv"
 	"strings"
 
@@ -83,6 +84,12 @@ func (enum *Enum) defaultValue() interface{} {
 	return enum.baseType
 }
 
+var enumRegExp = regexp.MustCompile(`('[\w\s,./-]*')\s*=\s*([-]*\d+)\s*`)
+
+func SetEnumRegExp(reg *regexp.Regexp) {
+	enumRegExp = reg
+}
+
 func parseEnum(name, chType string) (*Enum, error) {
 	var (
 		data     string
@@ -109,14 +116,16 @@ func parseEnum(name, chType string) (*Enum, error) {
 		iv: make(map[string]interface{}),
 		vi: make(map[interface{}]string),
 	}
-	for _, block := range strings.Split(data[:len(data)-1], ",") {
-		parts := strings.Split(block, "=")
-		if len(parts) != 2 {
+
+	var res = enumRegExp.FindAllStringSubmatch(data[:len(data)-1], -1)
+
+	for _, parts := range res {
+		if len(parts) != 3 {
 			return nil, fmt.Errorf("invalid Enum format: %s", chType)
 		}
 		var (
-			ident      = strings.TrimSpace(parts[0])
-			value, err = strconv.ParseInt(strings.TrimSpace(parts[1]), 10, 16)
+			ident      = strings.TrimSpace(parts[1])
+			value, err = strconv.ParseInt(strings.TrimSpace(parts[2]), 10, 16)
 		)
 		if err != nil {
 			return nil, fmt.Errorf("invalid Enum value: %v", chType)
