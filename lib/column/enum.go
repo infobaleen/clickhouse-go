@@ -111,23 +111,17 @@ func parseEnum(name, chType string) (*Enum, error) {
 
 	var err = ParseEnum([]byte(data[:len(data)-1]), func(str []byte, num int) {
 		var (
-			ident = string(str)
-			value = int64(num)
+			ident             = string(str)
+			value interface{} = int16(num)
 		)
-		{
-			var (
-				ident             = ident[1 : len(ident)-1]
-				value interface{} = int16(value)
-			)
-			if !isEnum16 {
-				value = int8(value.(int16))
-			}
-			if enum.baseType == nil {
-				enum.baseType = value
-			}
-			enum.iv[ident] = value
-			enum.vi[value] = ident
+		if !isEnum16 {
+			value = int8(value.(int16))
 		}
+		if enum.baseType == nil {
+			enum.baseType = value
+		}
+		enum.iv[ident] = value
+		enum.vi[value] = ident
 	})
 	if err != nil {
 		return nil, err
