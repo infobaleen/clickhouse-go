@@ -30,27 +30,3 @@ func TestParseEnum(t *testing.T) {
 		}
 	}
 }
-
-func TestParseE(t *testing.T) {
-	var res = enumRegExp.FindAllStringSubmatch(s, -1)
-
-	var refNumbers = map[string]struct{}{}
-	for i := -128; i <= 91; i++ {
-		refNumbers[fmt.Sprintf("%d", i)] = struct{}{}
-	}
-
-	var resNumbers = map[string]struct{}{}
-
-	for _, v := range res {
-		fmt.Println(v[1])
-		resNumbers[v[2]] = struct{}{}
-	}
-	if len(resNumbers) != len(refNumbers) {
-		t.Fatal("length mismatch")
-	}
-	for k := range refNumbers {
-		if _, exist := resNumbers[k]; !exist {
-			t.Fatalf(`%s not exist in resNumbers`, k)
-		}
-	}
-}
