@@ -2,11 +2,9 @@ package column
 
 import (
 	"fmt"
-	"regexp"
-	"strconv"
-	"strings"
-
 	"github.com/ClickHouse/clickhouse-go/lib/binary"
+	"strings"
+	"unicode"
 )
 
 type Enum struct {
@@ -84,12 +82,6 @@ func (enum *Enum) defaultValue() interface{} {
 	return enum.baseType
 }
 
-var enumRegExp = regexp.MustCompile(`('[\w\s,./-]*')\s*=\s*([-]*\d+)\s*`)
-
-func SetEnumRegExp(reg *regexp.Regexp) {
-	enumRegExp = reg
-}
-
 func parseEnum(name, chType string) (*Enum, error) {
 	var (
 		data     string
@@ -117,19 +109,11 @@ func parseEnum(name, chType string) (*Enum, error) {
 		vi: make(map[interface{}]string),
 	}
 
-	var res = enumRegExp.FindAllStringSubmatch(data[:len(data)-1], -1)
-
-	for _, parts := range res {
-		if len(parts) != 3 {
-			return nil, fmt.Errorf("invalid Enum format: %s", chType)
-		}
+	var err = ParseEnum([]byte(data[:len(data)-1]), func(str []byte, num int) {
 		var (
-			ident      = strings.TrimSpace(parts[1])
-			value, err = strconv.ParseInt(strings.TrimSpace(parts[2]), 10, 16)
+			ident = string(str)
+			value = int64(num)
 		)
-		if err != nil {
-			return nil, fmt.Errorf("invalid Enum value: %v", chType)
-		}
 		{
 			var (
 				ident             = ident[1 : len(ident)-1]
@@ -144,6 +128,117 @@ func parseEnum(name, chType string) (*Enum, error) {
 			enum.iv[ident] = value
 			enum.vi[value] = ident
 		}
+	})
+	if err != nil {
+		return nil, err
 	}
 	return &enum, nil
+}
+
+type parser struct {
+	b []byte
+}
+
+func ParseEnum(v []byte, fn func(str []byte, num int)) error {
+	var p = parser{b: v}
+	for {
+		p.SkipSpaces()
+		str, err := p.MustReadStr()
+		if err != nil {
+			return err
+		}
+		p.SkipSpaces()
+		if err := p.MustReadChar('='); err != nil {
+			return err
+		}
+		p.SkipSpaces()
+		num, err := p.MustReadInt()
+		if err != nil {
+			return err
+		}
+		fn(str, num)
+
+		p.SkipSpaces()
+		if p.Done() {
+			break
+		}
+		if err := p.MustReadChar(','); err != nil {
+			return err
+		}
+
+	}
+	return nil
+}
+
+func (p *parser) SkipSpaces() {
+	for len(p.b) > 0 && unicode.IsSpace(rune(p.b[0])) {
+		p.b = p.b[1:]
+	}
+}
+
+func (p *parser) MustReadStr() ([]byte, error) {
+	if err := p.MustReadChar('\''); err != nil {
+		return nil, err
+	}
+	var isEscape bool
+	var out []byte
+
+	for i, v := range p.b {
+		if isEscape {
+			if p.b[i-1] == '\'' && v != '\'' {
+				p.b = p.b[i:]
+				break
+			}
+			out = append(out, v)
+			isEscape = false
+		} else if v == '\\' {
+			isEscape = true
+		} else if v == '\'' {
+			isEscape = true
+		} else {
+			out = append(out, v)
+		}
+	}
+	return out, nil
+
+}
+func (p *parser) Done() bool {
+	return len(p.b) == 0
+}
+
+func (p *parser) MustReadChar(b byte) error {
+	if len(p.b) == 0 || p.b[0] != b {
+		return fmt.Errorf("invalid char '%s' (%s)", string([]byte{b}), p.b)
+	}
+	p.b = p.b[1:]
+	return nil
+}
+
+func (p *parser) MustReadInt() (int, error) {
+	if len(p.b) == 0 {
+		return 0, fmt.Errorf("expected number")
+	}
+	var isNegative bool
+	if p.b[0] == '-' {
+		isNegative = true
+		p.b = p.b[1:]
+	}
+	var num int
+	for i := 0; len(p.b) > 0; i++ {
+		var c = p.b[0]
+
+		if c >= '0' && c <= '9' {
+			if i == 0 && c == 0 {
+				return 0, fmt.Errorf("expected non zero digit")
+			}
+			num = num*10 + int(c-'0')
+		} else {
+			break
+		}
+		p.b = p.b[1:]
+	}
+	if isNegative {
+		num = -num
+	}
+	return num, nil
 }
